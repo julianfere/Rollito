@@ -20,6 +20,9 @@ await app.register(fastifyMultipart, {
   limits: { fileSize: 200 * 1024 * 1024, files: 200 }, // RAW pesados
 });
 
+// Chequeo de vida: lo usa el HEALTHCHECK del contenedor.
+app.get('/api/health', async () => ({ ok: true, uptime: Math.round(process.uptime()) }));
+
 await app.register(albumRoutes);
 await app.register(mediaRoutes);
 await app.register(zipRoutes);

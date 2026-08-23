@@ -37,6 +37,48 @@ npm run build && npm start   # sirve todo desde :8087
 > El puerto por defecto es **8087** (el 8080 estaba ocupado en la máquina de desarrollo).
 > Se cambia con `PORT`.
 
+## Docker (recomendado para la Pi)
+
+```bash
+cp .env.example .env      # completá ADMIN_PASSWORD y SESSION_SECRET
+docker compose up -d
+```
+
+Queda en `http://localhost:8087` (cambiá `HOST_PORT` en el `.env` para usar otro).
+Para cargar un rollo de prueba con 48 fotos generadas:
+
+```bash
+docker compose exec rollito node server/db/seed.js
+```
+
+Comandos útiles: `docker compose logs -f`, `docker compose restart`,
+`docker compose down` (los datos sobreviven), `docker compose build` tras cambiar
+el código.
+
+**Los datos viven en el volumen `rollito-data`**, no en la imagen: originales,
+derivadas WebP, zips y `rollito.sqlite`. Sobreviven a `down`, a los rebuilds y a
+las actualizaciones. Para respaldarlos:
+
+```bash
+docker run --rm -v rollito_rollito-data:/data -v "$PWD:/backup"   busybox tar czf /backup/rollito-backup.tar.gz -C /data .
+```
+
+Detalles de la imagen:
+
+- **Multi-stage**: el toolchain de build y las dependencias de desarrollo
+  (Vite, React) no llegan a la imagen final.
+- **Debian slim, no Alpine**: `sharp` y `better-sqlite3` traen binarios para
+  glibc y se instalan sin compilar. En Alpine (musl) habría que compilarlos —
+  varios minutos y medio giga de toolchain en una Pi.
+- **Corre como `node` (uid 1000)**, no como root.
+- **Healthcheck** contra `/api/health`; `restart: unless-stopped` la levanta sola
+  si se cae o al reiniciar la Pi.
+- **Límite de 1 GB de memoria**: la conversión con `sharp` es lo que más pega en
+  una Pi y así no se come la máquina entera.
+
+> La imagen pesa ~500 MB, casi todo binarios nativos de `sharp` y
+> `better-sqlite3`. En una Pi con tarjeta SD chica tenelo en cuenta.
+
 ## Estructura
 
 ```
@@ -52,6 +94,8 @@ web/src/
   components/       PhotoGrid · SelectionBar · Viewer · Toast
   pages/            AlbumPage · BurntScreen
 data/               originals/ previews/ zips/ + rollito.sqlite (no versionado)
+Dockerfile          imagen de producción (multi-stage)
+docker-compose.yml  servicio + volumen de datos
 ```
 
 ## Configuración

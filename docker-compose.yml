@@ -1,0 +1,41 @@
+services:
+  rollito:
+    build: .
+    image: rollito:latest
+    container_name: rollito
+    restart: unless-stopped
+
+    environment:
+      PORT: 8087
+      DATA_DIR: /data
+      # Sin valor por defecto a propósito: si falta, el contenedor no arranca.
+      # Se definen en un archivo .env al lado de este compose (ver .env.example).
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?definí ADMIN_PASSWORD en .env}
+      SESSION_SECRET: ${SESSION_SECRET:?definí SESSION_SECRET en .env}
+      # Opcionales: aviso al revelador cuando piden reabrir un rollo.
+      NOTIFY_WEBHOOK: ${NOTIFY_WEBHOOK:-}
+      PUBLIC_URL: ${PUBLIC_URL:-http://rollito.local}
+
+    ports:
+      - "${HOST_PORT:-8087}:8087"
+
+    volumes:
+      # Los originales, las derivadas WebP, los zips y la base viven acá.
+      # Volumen nombrado: sobrevive a `docker compose down` y a los rebuilds.
+      - rollito-data:/data
+
+    # La conversión con sharp es lo que más pega en una Raspberry Pi.
+    # Este tope evita que el contenedor se coma la máquina entera.
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  rollito-data:

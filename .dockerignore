@@ -1,0 +1,22 @@
+# Todo lo que no debe entrar al contexto de build.
+# node_modules es lo más importante: los binarios nativos de sharp y
+# better-sqlite3 son del host y romperían dentro del contenedor.
+node_modules
+**/node_modules
+
+# Las fotos y la base viven en un volumen, nunca en la imagen.
+data
+
+# Artefactos de build: el front se compila dentro del Dockerfile.
+web/dist
+
+.git
+.gitignore
+.env
+*.log
+*.sqlite
+*.sqlite-*
+Dockerfile
+docker-compose.yml
+.dockerignore
+README.md
