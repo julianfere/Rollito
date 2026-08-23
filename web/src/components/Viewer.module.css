@@ -1,0 +1,92 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--viewer-bg);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  animation: fadeIn 160ms ease;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px var(--pad-page);
+}
+
+.counter { font-family: var(--font-display); font-size: 22px; }
+.caption { color: var(--ink-dim); }
+
+.close {
+  margin-left: auto;
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--control-border);
+  background: var(--control);
+  color: var(--ink);
+}
+.close:hover { background: rgba(240, 226, 212, 0.12); }
+
+.stage {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 0 var(--pad-page);
+  min-height: 0; /* deja que el wrap encoja y mida bien */
+}
+
+.nav {
+  width: 54px; height: 54px;
+  display: grid; place-items: center;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--control-border);
+  background: var(--control);
+  color: var(--ink);
+}
+.nav:hover { background: rgba(240, 226, 212, 0.12); }
+
+.wrap {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.photo {
+  border-radius: 6px;
+  object-fit: contain;
+  box-shadow: var(--sh-photo);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 22px var(--pad-page) 34px;
+}
+
+.pick, .secondary {
+  min-height: 46px;
+  padding: 0 28px;
+  border-radius: var(--r-pill);
+  font-size: 15px;
+  border: 1px solid transparent;
+}
+
+.pick { background: var(--hot); color: var(--hot-ink); font-weight: 700; }
+.pick:hover { background: var(--hot-hover); }
+.mine { background: var(--sage); }
+
+.secondary { background: var(--control); border-color: var(--control-border); color: var(--ink); }
+.secondary:hover { background: rgba(240, 226, 212, 0.12); }
+
+@media (max-width: 760px) {
+  .stage { gap: 8px; padding: 0 10px; }
+  .nav { width: 44px; height: 44px; }
+  .bar { padding: 14px 18px 26px; }
+}

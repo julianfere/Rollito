@@ -1,0 +1,33 @@
+.root { min-height: 100vh; display: grid; place-items: center; padding: var(--pad-page); }
+
+.card { max-width: 540px; text-align: center; }
+
+.icon {
+  width: 62px; height: 62px;
+  margin: 0 auto 26px;
+  display: grid; place-items: center;
+  border-radius: var(--r-pill);
+  background: var(--control);
+  border: 1px solid var(--control-border);
+  color: var(--warm);
+}
+
+.title { font-size: clamp(40px, 6vw, 64px); margin: 0 0 18px; }
+.title em { color: var(--warm); }
+
+.blurb { color: var(--ink-dim); font-size: 18px; margin: 0 0 30px; text-wrap: pretty; }
+
+.primary {
+  min-height: 54px;
+  padding: 0 32px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: var(--hot);
+  color: var(--hot-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+.primary:hover { background: var(--hot-hover); }
+.primary:disabled { background: var(--sage); cursor: default; }
+
+.note { color: var(--ink-dim); margin-top: 22px; }

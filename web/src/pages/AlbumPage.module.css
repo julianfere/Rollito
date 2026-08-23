@@ -1,0 +1,55 @@
+.root { min-height: 100vh; padding-bottom: 120px; }
+
+.center { min-height: 100vh; display: grid; place-items: center; color: var(--ink-dim); }
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 26px var(--pad-page);
+}
+
+.brand { display: flex; align-items: center; gap: 10px; }
+
+.light {
+  width: 12px; height: 12px;
+  border-radius: var(--r-pill);
+  background: var(--hot);
+  box-shadow: 0 0 18px 4px rgba(255, 92, 43, 0.55);
+}
+
+.wordmark { font-family: var(--font-display); font-size: 22px; }
+
+.expiry {
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(242, 136, 74, 0.4);
+  color: var(--warm);
+}
+
+.secondary {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: var(--r-pill);
+  background: var(--control);
+  border: 1px solid var(--control-border);
+  color: var(--ink);
+  font-size: 14px;
+}
+.secondary:hover { background: rgba(240, 226, 212, 0.12); }
+
+.pad { padding: 30px var(--pad-page) 34px; }
+
+.kicker { color: var(--ink-dim); margin: 0 0 14px; }
+
+.title { font-size: clamp(50px, 7vw, 96px); margin: 0 0 18px; }
+
+.blurb { max-width: 48ch; color: var(--ink-dim); font-size: 18px; margin: 0; text-wrap: pretty; }
+
+@media (max-width: 760px) {
+  .head { padding: 16px 18px; gap: 12px; }
+  .pad { padding: 26px 18px 30px; }
+  .secondary { margin-left: 0; }
+}

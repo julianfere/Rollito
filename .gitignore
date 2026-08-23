@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/originals/*
+data/previews/*
+data/zips/*
+!data/**/.gitkeep
+*.sqlite
+*.sqlite-journal
+.env

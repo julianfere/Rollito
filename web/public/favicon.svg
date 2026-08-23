@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Rollo de 35mm. Silueta maciza y banda clara con perforaciones: es lo que
+       sobrevive a 16px, donde los detalles finos se empastan.
+       Colores de web/src/styles/tokens.css. -->
+  <defs>
+    <linearGradient id="cuerpo" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#ff7a45"/>
+      <stop offset="55%" stop-color="#ff5c2b"/>
+      <stop offset="100%" stop-color="#e8481d"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="#16100d"/>
+
+  <!-- lengüeta del carrete -->
+  <rect x="26" y="12" width="10" height="8" rx="2.5" fill="#f2884a"/>
+
+  <!-- cuerpo del canister -->
+  <rect x="15" y="19" width="32" height="34" rx="6.5" fill="url(#cuerpo)"/>
+
+  <!-- banda de película con perforaciones -->
+  <rect x="15" y="30" width="32" height="12" fill="#f0e2d4"/>
+  <g fill="#16100d">
+    <rect x="20" y="33.5" width="4" height="5" rx="1.2"/>
+    <rect x="29" y="33.5" width="4" height="5" rx="1.2"/>
+    <rect x="38" y="33.5" width="4" height="5" rx="1.2"/>
+  </g>
+
+  <!-- brillo sutil: sólo se nota en los tamaños grandes -->
+  <rect x="18" y="22" width="6" height="6" rx="3" fill="#ffb27a" opacity="0.35"/>
+</svg>

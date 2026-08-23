@@ -1,0 +1,47 @@
+/* Tokens del handoff. Valores finales — no improvisar acá. */
+:root {
+  color-scheme: dark;
+
+  --bg: #16100d;
+  --bg-glow: radial-gradient(120% 80% at 12% -12%, #2b1b13 0%, #16100d 60%);
+  --ink: #f0e2d4;
+  --hot: #ff5c2b;
+  --hot-hover: #ff7a45;
+  --hot-ink: #1a0f0a;
+  --warm: #f2884a;
+  --warm-hover: #ffb27a;
+  --sage: #9aa86a;
+  --sage-ink: #c3cf92;
+  --panel: #241811;
+  --bar: rgba(35, 23, 17, 0.92);
+  --viewer-bg: #0e0907;
+
+  --surface: rgba(240, 226, 212, 0.045);
+  --surface-border: rgba(240, 226, 212, 0.10);
+  --control: rgba(240, 226, 212, 0.07);
+  --control-border: rgba(240, 226, 212, 0.18);
+  /* Piso de contraste AA: no bajar de 0.60 en texto <18px */
+  --ink-dim: rgba(240, 226, 212, 0.60);
+
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
+
+  --r-photo: 4px;
+  --r-card: 18px;
+  --r-dialog: 26px;
+  --r-pill: 999px;
+
+  --sh-card: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --sh-raised: 0 18px 50px rgba(0, 0, 0, 0.6);
+  --sh-dialog: 0 30px 80px rgba(0, 0, 0, 0.6);
+  --sh-photo: 0 40px 90px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(240, 226, 212, 0.1);
+  --sh-select: 0 0 0 3px var(--hot), 0 0 26px rgba(255, 92, 43, 0.35);
+
+  --pad-page: clamp(24px, 5vw, 72px);
+  --rail-gutter: 78px;
+}
+
+@media (max-width: 760px) {
+  :root { --pad-page: 18px; --rail-gutter: 0px; }
+}

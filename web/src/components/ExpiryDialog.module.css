@@ -1,0 +1,77 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 6, 4, 0.72);
+  backdrop-filter: blur(6px);
+  animation: fadeIn 160ms ease;
+}
+
+.panel {
+  width: min(460px, 100%);
+  padding: 30px;
+  border-radius: var(--r-dialog);
+  background: var(--panel);
+  border: 1px solid rgba(240, 226, 212, 0.08);
+  box-shadow: var(--sh-dialog);
+}
+
+.title { font-family: var(--font-display); font-size: 26px; margin: 0 0 8px; }
+.blurb { color: var(--ink-dim); font-size: 15px; margin: 0 0 22px; text-wrap: pretty; }
+
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+
+.pill {
+  min-height: 40px;
+  padding: 10px 18px;
+  font-size: 13px;
+  border-radius: var(--r-pill);
+  background: rgba(240, 226, 212, 0.05);
+  border: 1px solid var(--control-border);
+  color: var(--ink);
+}
+.pill:hover { background: rgba(240, 226, 212, 0.1); }
+
+.on { background: var(--hot); border-color: transparent; color: var(--hot-ink); font-weight: 700; }
+
+.label { display: block; color: var(--ink-dim); letter-spacing: 0.18em; margin-bottom: 8px; }
+
+.date {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 16px;
+  color-scheme: dark;
+  color: var(--ink);
+  background: var(--control);
+  border: 1px solid var(--control-border);
+  border-radius: var(--r-pill);
+}
+
+.preview {
+  margin: 20px 0 0;
+  padding: 14px 18px;
+  border-radius: var(--r-card);
+  background: rgba(255, 92, 43, 0.12);
+  border: 1px solid rgba(255, 92, 43, 0.3);
+  color: #ff9b70;
+  font-size: 14px;
+}
+
+.actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 26px; }
+
+.ghost, .primary {
+  min-height: 46px;
+  padding: 0 24px;
+  border-radius: var(--r-pill);
+  font-size: 15px;
+  border: 1px solid transparent;
+}
+
+.ghost { background: transparent; border-color: var(--control-border); color: var(--ink); }
+.ghost:hover { background: var(--control); }
+
+.primary { background: var(--hot); color: var(--hot-ink); font-weight: 700; }
+.primary:hover { background: var(--hot-hover); }

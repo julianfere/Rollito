@@ -1,0 +1,71 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+  padding: 0 var(--pad-page);
+}
+
+.tile {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--r-photo);
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(240, 226, 212, 0.08);
+  transition: transform 160ms ease, box-shadow 180ms ease;
+}
+
+.tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tile:hover {
+  transform: scale(1.012);
+  box-shadow: inset 0 0 0 1px rgba(240, 226, 212, 0.28), var(--sh-card);
+}
+
+.on, .tile.on:hover { transform: scale(0.97); box-shadow: var(--sh-select); }
+
+.check, .grab {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  opacity: 0;
+  backdrop-filter: blur(4px);
+  transition: opacity 140ms ease;
+  color: var(--ink);
+}
+
+.check {
+  top: 8px; right: 8px; width: 32px; height: 32px;
+  border: 1px solid rgba(240, 226, 212, 0.55);
+  background: rgba(22, 16, 13, 0.5);
+}
+
+.grab {
+  bottom: 8px; right: 8px; width: 30px; height: 30px;
+  border: none;
+  background: rgba(22, 16, 13, 0.55);
+}
+
+.tile:hover .check, .tile:hover .grab,
+.check:focus-visible, .grab:focus-visible { opacity: 1; }
+
+.on .check {
+  opacity: 1;
+  border: none;
+  background: var(--hot);
+  color: var(--bg);
+}
+
+.hint {
+  color: var(--ink-dim);
+  text-align: center;
+  padding: 40px 0 20px;
+}
+
+/* Móvil: 2 columnas y controles siempre visibles a 44px (no hay hover). */
+@media (max-width: 760px) {
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 14px; }
+  .check, .grab { opacity: 1; width: 44px; height: 44px; }
+}
