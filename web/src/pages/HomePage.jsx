@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './HomePage.module.css';
 
+// Único adorno de la home: una tira de perforaciones de 35mm al pie.
+const PERFORACIONES = Array.from({ length: 40 });
+
 export default function HomePage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState(null);
@@ -27,6 +30,8 @@ export default function HomePage() {
 
   return (
     <div className={styles.root}>
+      <span className={styles.halo} aria-hidden="true" />
+
       <div className={styles.col}>
         <div className={styles.brand}>
           <span className={styles.light} aria-hidden="true" />
@@ -39,19 +44,18 @@ export default function HomePage() {
           Sin cuentas, sin Drive, sin pedirle nada a nadie.
         </p>
 
-        <form className={styles.row} onSubmit={reveal}>
-          <div className={styles.field}>
-            <label className={`mono ${styles.label}`} htmlFor="code">Código del rollo</label>
-            <input
-              id="code"
-              className={styles.input}
-              placeholder="4F7K2"
-              value={code}
-              maxLength={12}
-              autoComplete="off"
-              onChange={(e) => setCode(e.target.value)}
-            />
-          </div>
+        {/* Campo y botón como una sola pieza. */}
+        <form className={styles.piece} onSubmit={reveal}>
+          <label className={`mono ${styles.label}`} htmlFor="code">Código</label>
+          <input
+            id="code"
+            className={styles.input}
+            placeholder="4F7K2"
+            value={code}
+            maxLength={12}
+            autoComplete="off"
+            onChange={(e) => setCode(e.target.value)}
+          />
           <button className={styles.primary} disabled={busy || !code.trim()}>
             {busy ? 'Buscando…' : 'Revelar'}
           </button>
@@ -64,11 +68,8 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className={styles.art} aria-hidden="true">
-        <span className={styles.halo} />
-        <span className={`${styles.frame} ${styles.frameA}`} />
-        <span className={`${styles.frame} ${styles.frameB}`} />
-        <span className={`mono ${styles.artLabel}`}>luz de seguridad encendida</span>
+      <div className={styles.strip} aria-hidden="true">
+        {PERFORACIONES.map((_, i) => <span key={i} className={styles.perf} />)}
       </div>
     </div>
   );

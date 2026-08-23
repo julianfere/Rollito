@@ -1,17 +1,42 @@
 .root {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  align-items: center;
-  gap: 48px;
-  padding: 56px var(--pad-page);
   position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px var(--pad-page) 0;
   overflow: hidden;
 }
 
-.col { position: relative; z-index: 2; max-width: 580px; }
+/* Halo cálido detrás del contenido, como la luz del cuarto oscuro. */
+.halo {
+  position: absolute;
+  top: -18%;
+  left: 50%;
+  width: min(900px, 120vw);
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 92, 43, 0.16) 0%, transparent 62%);
+}
 
-.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 56px; }
+.col {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 660px;
+  margin: auto 0;
+  text-align: center;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 48px;
+}
 
 .light {
   width: 12px; height: 12px;
@@ -22,36 +47,67 @@
 
 .wordmark { font-family: var(--font-display); font-size: 22px; }
 
-.title { font-size: clamp(48px, 6.6vw, 92px); margin: 0 0 22px; }
+.title {
+  font-size: clamp(46px, 7.2vw, 86px);
+  line-height: 0.98;
+  text-wrap: balance;
+  margin: 0 0 22px;
+}
 .title em { color: var(--warm); }
 
-.blurb { font-size: 18px; color: var(--ink-dim); max-width: 44ch; margin: 0; text-wrap: pretty; }
+.blurb {
+  font-size: 18px;
+  color: var(--ink-dim);
+  max-width: 48ch;
+  margin: 0 auto;
+  text-wrap: pretty;
+}
 
-.row { display: flex; gap: 12px; align-items: flex-end; margin-top: 40px; flex-wrap: wrap; }
+/* Campo + botón como una sola pieza. */
+.piece {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 520px;
+  margin: 40px auto 0;
+  padding: 8px 8px 8px 22px;
+  border-radius: var(--r-pill);
+  background: var(--control);
+  border: 1px solid var(--control-border);
+  box-shadow: var(--sh-raised);
+  transition: border-color 140ms ease;
+}
 
-.field { flex: 1; min-width: 230px; }
+.piece:focus-within { border-color: var(--hot); }
 
-.label { display: block; color: var(--ink-dim); margin-bottom: 8px; letter-spacing: 0.18em; }
+.label {
+  flex: none;
+  color: var(--ink-dim);
+  letter-spacing: 0.18em;
+}
 
 .input {
-  width: 100%;
-  min-height: 54px;
-  padding: 0 20px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 14px 0;
   font-family: var(--font-display);
-  font-size: 22px;
-  letter-spacing: 0.16em;
+  font-size: 24px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
+  text-align: center;
   color: var(--ink);
-  background: rgba(240, 226, 212, 0.06);
-  border: 1px solid var(--control-border);
-  border-radius: var(--r-pill);
   caret-color: var(--hot);
 }
-.input::placeholder { color: rgba(240, 226, 212, 0.6); }
+.input::placeholder { color: rgba(240, 226, 212, 0.4); }
+.input:focus { outline: none; } /* el foco lo marca la pieza entera */
 
 .primary {
-  min-height: 54px;
-  padding: 0 34px;
+  flex: none;
+  min-height: 48px;
+  padding: 0 28px;
   border: none;
   border-radius: var(--r-pill);
   background: var(--hot);
@@ -62,45 +118,45 @@
 .primary:hover:not(:disabled) { background: var(--hot-hover); }
 .primary:disabled { opacity: 0.55; cursor: default; }
 
-.error { color: var(--warm); font-size: 15px; margin: 16px 0 0; }
+.error { color: var(--warm); font-size: 15px; margin: 18px 0 0; }
 
-.note { color: var(--ink-dim); margin-top: 28px; letter-spacing: 0.14em; }
+.note { color: var(--ink-dim); margin-top: 26px; letter-spacing: 0.14em; }
 
-/* Columna decorativa */
-.art { position: relative; height: 100%; min-height: 420px; }
-
-.halo {
-  position: absolute; inset: 0;
-  background: radial-gradient(60% 50% at 55% 45%, rgba(255, 92, 43, 0.28), transparent 70%);
+/* Tira de 35mm al pie: el único adorno. */
+.strip {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  width: 100%;
+  margin-top: auto;
+  padding: 26px 0;
+  border-top: 1px solid rgba(240, 226, 212, 0.07);
+  overflow: hidden;
 }
 
-.frame {
-  position: absolute;
-  border-radius: 6px;
-  box-shadow: var(--sh-raised);
-}
-
-.frameA {
-  width: 46%; aspect-ratio: 3/4; top: 14%; left: 16%;
-  transform: rotate(-8deg);
-  background: linear-gradient(150deg, #8a5a38, #452e1e);
-}
-
-.frameB {
-  width: 42%; aspect-ratio: 4/5; top: 30%; left: 46%;
-  transform: rotate(6deg);
-  background: linear-gradient(150deg, #6b4a34, #3a281d);
-}
-
-.artLabel {
-  position: absolute; bottom: 8%; left: 50%;
-  transform: translateX(-50%);
-  color: var(--ink-dim);
-  white-space: nowrap;
+.perf {
+  flex: none;
+  width: 16px;
+  height: 9px;
+  border-radius: 2px;
+  background: rgba(240, 226, 212, 0.09);
 }
 
 @media (max-width: 760px) {
-  .root { grid-template-columns: 1fr; min-height: 0; padding: 20px 18px 50px; gap: 26px; }
-  .art { display: none; }
+  .root { padding: 32px 18px 0; }
   .brand { margin-bottom: 34px; }
+
+  /* La pieza se abre en tres filas: label, campo y botón a lo ancho. */
+  .piece {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 26px;
+  }
+  .label { text-align: center; }
+  .input { padding: 6px 0; }
+  .primary { width: 100%; }
 }
