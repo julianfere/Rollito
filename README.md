@@ -76,6 +76,17 @@ Detalles de la imagen:
 - **Límite de 1 GB de memoria**: la conversión con `sharp` es lo que más pega en
   una Pi y así no se come la máquina entera.
 
+### Sobre `DATA_DIR`
+
+No lo pongas en el `.env` si usás Docker. El compose lo fija en `/data` (el
+volumen) y un valor relativo puede terminar dentro del contenedor: las fotos
+irían a parar fuera del volumen, o la subida fallaría con
+`ENOENT ... open 'data/originals/3.jpg'`.
+
+El código resuelve siempre a ruta absoluta y crea `originals/`, `previews/` y
+`zips/` al arrancar, así que el caso está cubierto — pero la ruta correcta
+igual es dejar que el compose lo maneje.
+
 > La imagen pesa ~500 MB, casi todo binarios nativos de `sharp` y
 > `better-sqlite3`. En una Pi con tarjeta SD chica tenelo en cuenta.
 

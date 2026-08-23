@@ -7,6 +7,9 @@ services:
 
     environment:
       PORT: 8087
+      # Fijo, sin interpolar: es la ruta del volumen de acá abajo. Si se dejara
+      # que un .env lo pisara con algo relativo, las subidas fallarían con
+      # ENOENT sobre 'data/originals/...' y las fotos irían fuera del volumen.
       DATA_DIR: /data
       # Sin valor por defecto a propósito: si falta, el contenedor no arranca.
       # Se definen en un archivo .env al lado de este compose (ver .env.example).

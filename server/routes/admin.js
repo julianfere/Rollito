@@ -1,4 +1,4 @@
-import { createWriteStream, unlinkSync } from 'node:fs';
+import { createWriteStream, unlinkSync, mkdirSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { join, extname, basename } from 'node:path';
 import { db, DATA_DIR } from '../db/index.js';
@@ -104,9 +104,13 @@ export default async function adminRoutes(app) {
       ).run(album.id, part.filename, sort);
 
       const id = row.lastInsertRowid;
-      const dest = join(DATA_DIR, 'originals', `${id}${extname(part.filename) || '.jpg'}`);
+      const dir = join(DATA_DIR, 'originals');
+      const dest = join(dir, `${id}${extname(part.filename) || '.jpg'}`);
 
       try {
+        // Barato e idempotente: cubre el caso de que el volumen se monte
+        // encima del directorio después de arrancar el proceso.
+        mkdirSync(dir, { recursive: true });
         await pipeline(part.file, createWriteStream(dest));
         // Un archivo truncado (o el límite de tamaño) deja basura: no lo dejamos pasar.
         if (part.file.truncated) throw new Error('archivo demasiado grande');
