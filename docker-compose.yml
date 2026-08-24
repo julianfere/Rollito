@@ -22,10 +22,25 @@ services:
     ports:
       - "${HOST_PORT:-8087}:8087"
 
+    # El proceso corre como `node` (uid 1000). Con un bind mount, el chown del
+    # Dockerfile no aplica: manda el dueño de la carpeta del host. Si la carpeta
+    # quedó de root, las subidas fallan con EACCES. Ajustá PUID/PGID al dueño
+    # real (`id -u`), o dejá el default si esa carpeta ya es de uid 1000.
+    user: "${PUID:-1000}:${PGID:-1000}"
+
     volumes:
       # Los originales, las derivadas WebP, los zips y la base viven acá.
-      # Volumen nombrado: sobrevive a `docker compose down` y a los rebuilds.
-      - rollito-data:/data
+      #
+      # Es un bind mount a una carpeta del host, no un volumen
+      # nombrado: en Dokploy los volúmenes nombrados van contra el proyecto y se
+      # recrean vacíos cuando se borra y se vuelve a crear la app (o al cambiar
+      # el nombre del stack), que es exactamente cómo se pierden los rollos ya
+      # compartidos. Una ruta del host no depende del ciclo de vida del stack.
+      #
+      # En Dokploy poné DATA_PATH=../files/data (la carpeta persistente que
+      # Dokploy monta por aplicación). Sin la variable, cae en ./data, al lado
+      # del compose, que es lo razonable fuera de Dokploy.
+      - ${DATA_PATH:-./data}:/data
 
     # La conversión con sharp es lo que más pega en una Raspberry Pi.
     # Este tope evita que el contenedor se coma la máquina entera.
@@ -39,6 +54,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-volumes:
-  rollito-data:

@@ -119,13 +119,13 @@ export default function AdminPage() {
   }, [target, uploadTo]);
 
   /** Crea el rollo y recién ahí sube: si la creación falla, no queda rollo vacío. */
-  const createAndUpload = useCallback(async ({ title, days }) => {
+  const createAndUpload = useCallback(async ({ title, days, code }) => {
     const files = pending;
     try {
       const r = await fetch('/api/admin/albums', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title, days }),
+        body: JSON.stringify({ title, days, code }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) return { ok: false, error: body.error ?? 'No pudimos crear el rollo.' };
@@ -145,7 +145,32 @@ export default function AdminPage() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (r.ok) { say(msg); load(); }
+    // El error se avisa: cambiar el código puede chocar con otro rollo (409) y
+    // en silencio parecía que el cambio se había aplicado.
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      say(err.error ?? 'No pudimos guardar el cambio');
+      return false;
+    }
+    say(msg);
+    load();
+    return true;
+  };
+
+  /** Cambiar el código a mano: recupera el link de un rollo ya compartido. */
+  const editCode = async (a) => {
+    const raw = window.prompt(
+      `Código de «${a.title}».
+
+Es lo que forma el link: ${location.host}/r/CODIGO
+` +
+      'Poné el de un rollo que ya compartiste para que ese link vuelva a abrir.',
+      a.code
+    );
+    if (raw === null) return;
+    const code = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!code || code === a.code) return;
+    await patch(a.id, { code }, `El link de ${a.title} ahora es /r/${code.toLowerCase()}`);
   };
 
   if (!data) return <div className={styles.center} />;
@@ -330,6 +355,9 @@ export default function AdminPage() {
             <div className={styles.rowActions}>
               <button className={styles.secondary} onClick={() => setExpiry(a)}>
                 Vencimiento
+              </button>
+              <button className={styles.secondary} onClick={() => editCode(a)}>
+                Cambiar código
               </button>
               <button
                 className={a.isOpen ? styles.secondary : styles.sage}

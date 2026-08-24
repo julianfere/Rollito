@@ -55,13 +55,57 @@ Comandos útiles: `docker compose logs -f`, `docker compose restart`,
 `docker compose down` (los datos sobreviven), `docker compose build` tras cambiar
 el código.
 
-**Los datos viven en el volumen `rollito-data`**, no en la imagen: originales,
-derivadas WebP, zips y `rollito.sqlite`. Sobreviven a `down`, a los rebuilds y a
-las actualizaciones. Para respaldarlos:
+**Los datos viven en el host, no en la imagen**: originales, derivadas WebP,
+zips y `rollito.sqlite`. Por defecto van a `./data`, al lado del compose;
+`DATA_PATH` en el `.env` cambia esa ruta. Sobreviven a `down`, a los rebuilds y
+a las actualizaciones. Para respaldarlos alcanza con copiar esa carpeta:
 
 ```bash
-docker run --rm -v rollito_rollito-data:/data -v "$PWD:/backup"   busybox tar czf /backup/rollito-backup.tar.gz -C /data .
+tar czf rollito-backup.tar.gz -C ./data .
 ```
+
+### Dokploy
+
+Dokploy recrea el stack cuando borrás y volvés a crear la aplicación (o si
+cambiás el nombre del proyecto). Un **volumen nombrado** se recrea vacío en ese
+caso — así se pierden los rollos ya compartidos. Por eso el compose monta una
+**ruta del host**, que no depende del ciclo de vida del stack.
+
+En la aplicación de Dokploy, en *Environment*:
+
+```
+ADMIN_PASSWORD=...
+SESSION_SECRET=...
+DATA_PATH=../files/data
+PUID=1000
+PGID=1000
+```
+
+`../files/` es la carpeta persistente que Dokploy mantiene por aplicación (en el
+host, `/etc/dokploy/projects/<proyecto>/<app>/files/`). Podés confirmar la ruta
+en la pestaña *Advanced → Volumes* de la app. Lo importante es que apunte a algo
+fuera del directorio del stack.
+
+El proceso corre como uid 1000, así que esa carpeta tiene que pertenecerle. Si
+las subidas fallan con `EACCES`, en el host:
+
+```bash
+chown -R 1000:1000 /etc/dokploy/projects/<proyecto>/<app>/files/data
+```
+
+**Si ya perdiste datos**: los rollos viejos no vuelven, pero el link sí — creá
+el rollo de nuevo y ponele a mano el mismo código (ver abajo).
+
+### Código del rollo a mano
+
+El código corto es lo que forma el link (`/r/CUMPLELU9`). Normalmente se sortea,
+pero podés escribirlo al crear el rollo, o cambiarlo después desde el panel.
+Sirve para **recuperar un link que ya compartiste**: si el rollo se perdió,
+volvés a crearlo con el mismo código y el link viejo abre igual.
+
+Se guarda en mayúsculas y sin separadores, así que `cumple-lu9`, `CUMPLE LU9` y
+`CUMPLELU9` son el mismo rollo. Entre 4 y 24 caracteres, letras y números. Dos
+rollos no pueden compartir código: si está ocupado, el panel lo avisa.
 
 Detalles de la imagen:
 

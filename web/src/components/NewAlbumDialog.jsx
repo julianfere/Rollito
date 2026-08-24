@@ -10,6 +10,7 @@ const PRESETS = [7, 14, 30, 0];
  */
 export default function NewAlbumDialog({ fileCount, onCreate, onClose }) {
   const [title, setTitle] = useState('');
+  const [code, setCode] = useState('');
   const [days, setDays] = useState(14);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -30,7 +31,7 @@ export default function NewAlbumDialog({ fileCount, onCreate, onClose }) {
     if (!name) { setError('Ponele un nombre para encontrarlo después.'); return; }
     setBusy(true);
     setError(null);
-    const res = await onCreate({ title: name, days });
+    const res = await onCreate({ title: name, days, code: code.trim() });
     if (!res?.ok) {
       setError(res?.error ?? 'No pudimos crear el rollo.');
       setBusy(false);
@@ -60,6 +61,26 @@ export default function NewAlbumDialog({ fileCount, onCreate, onClose }) {
           autoComplete="off"
           onChange={(e) => setTitle(e.target.value)}
         />
+
+        <label className={`mono ${styles.label}`} htmlFor="rollo-codigo">
+          Código <span className={styles.optional}>— opcional</span>
+        </label>
+        <input
+          id="rollo-codigo"
+          className={`mono ${styles.input} ${styles.code}`}
+          value={code}
+          maxLength={24}
+          placeholder="se sortea solo"
+          autoComplete="off"
+          spellCheck={false}
+          // Mayúsculas y sin separadores acá mismo: es lo que el server guarda,
+          // así lo que se ve en el campo es exactamente lo que queda en el link.
+          onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+        />
+        <p className={styles.hint}>
+          Dejalo vacío y se sortea uno. Ponelo a mano para recuperar el link de un
+          rollo que ya compartiste: /r/<b>{code || 'CÓDIGO'}</b>
+        </p>
 
         <span className={`mono ${styles.label}`}>Vencimiento</span>
         <div className={styles.presets}>

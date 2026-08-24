@@ -2,7 +2,7 @@ import { createWriteStream, unlinkSync, mkdirSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { join, extname, basename } from 'node:path';
 import { db, DATA_DIR } from '../db/index.js';
-import { makeCode, daysLeft, isBurnt, expiryLabel } from '../lib/albums.js';
+import { makeCode, daysLeft, isBurnt, expiryLabel, validateCode } from '../lib/albums.js';
 import { enqueueConversion } from '../lib/uploads.js';
 import { checkPassword, issueSession, clearSession, isAuthed, requireAdmin } from '../lib/auth.js';
 
@@ -64,9 +64,21 @@ export default async function adminRoutes(app) {
     if (!title) return reply.code(400).send({ error: 'ponele un nombre al rollo' });
     const days = Number(req.body?.days ?? 14);
 
+    // Código a mano: sirve para recrear un rollo que ya se compartió y que el
+    // link viejo siga abriendo. Si no viene, se sortea uno.
     let code;
-    do { code = makeCode(5); }
-    while (db.prepare('SELECT 1 FROM albums WHERE code = ?').get(code));
+    const wanted = String(req.body?.code ?? '').trim();
+    if (wanted) {
+      const checked = validateCode(wanted);
+      if (checked.error) return reply.code(400).send({ error: checked.error });
+      if (db.prepare('SELECT 1 FROM albums WHERE code = ?').get(checked.code)) {
+        return reply.code(409).send({ error: `el código ${checked.code} ya está usado por otro rollo` });
+      }
+      code = checked.code;
+    } else {
+      do { code = makeCode(5); }
+      while (db.prepare('SELECT 1 FROM albums WHERE code = ?').get(code));
+    }
 
     const r = db.prepare(
       `INSERT INTO albums (title, code, slug, expires_at, is_open) VALUES (?,?,?,?,1)`
@@ -161,7 +173,19 @@ export default async function adminRoutes(app) {
     const album = db.prepare('SELECT * FROM albums WHERE id = ?').get(req.params.id);
     if (!album) return reply.code(404).send({ error: 'no existe ese rollo' });
 
-    const { days, expiresAt, isOpen, coverPhotoId } = req.body ?? {};
+    const { days, expiresAt, isOpen, coverPhotoId, code } = req.body ?? {};
+
+    // Cambiar el código a mano: recupera el link de un rollo que ya se
+    // compartió. El viejo deja de funcionar en el mismo momento.
+    if (code !== undefined) {
+      const checked = validateCode(code);
+      if (checked.error) return reply.code(400).send({ error: checked.error });
+      if (checked.code !== album.code &&
+          db.prepare('SELECT 1 FROM albums WHERE code = ?').get(checked.code)) {
+        return reply.code(409).send({ error: `el código ${checked.code} ya está usado por otro rollo` });
+      }
+      db.prepare('UPDATE albums SET code = ? WHERE id = ?').run(checked.code, album.id);
+    }
 
     if (days !== undefined) {
       db.prepare('UPDATE albums SET expires_at = ?, is_open = 1 WHERE id = ?')
@@ -181,6 +205,7 @@ export default async function adminRoutes(app) {
 
     const fresh = db.prepare('SELECT * FROM albums WHERE id = ?').get(album.id);
     return {
+      code: fresh.code,
       isOpen: !!fresh.is_open, expiresAt: fresh.expires_at,
       daysLeft: daysLeft(fresh), expiryLabel: expiryLabel(fresh), burnt: isBurnt(fresh),
     };
