@@ -4,6 +4,7 @@ import { join, extname, basename } from 'node:path';
 import { db, DATA_DIR } from '../db/index.js';
 import { makeCode, daysLeft, isBurnt, expiryLabel, validateCode } from '../lib/albums.js';
 import { enqueueConversion } from '../lib/uploads.js';
+import { archiveAlbum } from '../lib/archive.js';
 import { checkPassword, issueSession, clearSession, isAuthed, requireAdmin } from '../lib/auth.js';
 
 const slugify = (s) => s.toLowerCase().normalize('NFD')
@@ -196,8 +197,19 @@ export default async function adminRoutes(app) {
     }
     if (isOpen !== undefined) {
       db.prepare('UPDATE albums SET is_open = ? WHERE id = ?').run(isOpen ? 1 : 0, album.id);
-      // Reabrir da por atendidos los pedidos pendientes
-      if (isOpen) db.prepare('DELETE FROM reopen_requests WHERE album_id = ?').run(album.id);
+      if (isOpen) {
+        // Reabrir da por atendidos los pedidos pendientes
+        db.prepare('DELETE FROM reopen_requests WHERE album_id = ?').run(album.id);
+        // Vuelve a ser archivable cuando se cierre de nuevo. Las previews no se
+        // regeneran acá: las rehace media.js a medida que alguien las pide.
+        db.prepare('UPDATE albums SET archived_at = NULL WHERE id = ?').run(album.id);
+      } else {
+        // Sin await: recomprimir un rollo entero tarda minutos y el panel tiene
+        // que responder ya. El espacio se libera de fondo.
+        archiveAlbum(album.id, app.log)
+          .catch((err) => app.log.error({ album: album.id, err: String(err) },
+            'falló el archivado del rollo'));
+      }
     }
     if (coverPhotoId !== undefined) {
       db.prepare('UPDATE albums SET cover_photo_id = ? WHERE id = ?').run(coverPhotoId, album.id);

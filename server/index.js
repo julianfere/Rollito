@@ -11,6 +11,7 @@ import mediaRoutes from './routes/media.js';
 import zipRoutes from './routes/zips.js';
 import adminRoutes from './routes/admin.js';
 import { sweepExpiredZips } from './lib/zips.js';
+import { sweepBurntAlbums } from './lib/archive.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const app = Fastify({ logger: true, bodyLimit: 2 * 1024 * 1024 });
@@ -44,6 +45,16 @@ if (existsSync(dist)) {
 sweepExpiredZips();
 const sweeper = setInterval(sweepExpiredZips, 3600e3);
 sweeper.unref?.();
+
+// Un rollo que vence por fecha no dispara nada solo (isBurnt() se evalúa al
+// leer): sin este barredor nunca liberaría el espacio. Va aparte del de zips
+// porque recomprimir tarda minutos y no queremos que arrastre al otro.
+const archiver = setInterval(
+  () => sweepBurntAlbums(app.log).catch((err) =>
+    app.log.error({ err: String(err) }, 'falló el barrido de rollos velados')),
+  3600e3,
+);
+archiver.unref?.();
 
 const port = Number(process.env.PORT ?? 8087);
 await app.listen({ port, host: '0.0.0.0' });

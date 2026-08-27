@@ -142,6 +142,8 @@ server/
   db/schema.sql     albums · photos · reopen_requests · zips
   db/seed.js        datos de desarrollo (fotos generadas con sharp)
   lib/albums.js     reglas de vencimiento y códigos
+  lib/archive.js    libera espacio: recomprime velados, borra huérfanos
+  tools/cleanup.js  mantenimiento a mano (ver "Espacio en disco")
   routes/           albums.js (galería, 410 si venció) · media.js (previews, original)
 web/public/         favicon (SVG + PNG + .ico) y manifest
 web/src/
@@ -201,6 +203,43 @@ Las siete pantallas del handoff están implementadas y verificadas en browser
 - **Vencimiento** — al vencer o cerrar, la API devuelve 410 y el front muestra
   "se veló"; el pedido de reapertura queda en `reopen_requests` y dispara el aviso.
 - **Responsive** — breakpoint único en 760px.
+
+## Espacio en disco
+
+En la Pi el disco es el recurso escaso, así que hay dos mecanismos.
+
+**Archivado de rollos velados** — cuando un rollo se cierra a mano o vence,
+sus fotos ya no se pueden ver ni descargar (todo devuelve 410), así que lo que
+queda en disco es peso muerto. Al velarse:
+
+- los originales se recomprimen con mozjpeg q92 **en su lugar**, sin reescalar;
+- las previews se borran (son caché: se regeneran solas);
+- los zips del rollo se borran sin esperar el TTL de 24h.
+
+Medido sobre fotos de cámara, q92 deja el original en ~35% de su tamaño sin
+diferencia visible. **Es irreversible**: reabrir el rollo no devuelve el JPEG
+original de la cámara, sólo regenera las previews. La copia maestra vive en la
+máquina del fotógrafo — la Pi es el centro de distribución, no el archivo.
+
+Reabrir no regenera nada por adelantado: las previews se rehacen de a una,
+cuando alguien las pide (`/media/:id`). El rollo abre al instante y sólo se
+paga por las fotos que realmente se miran.
+
+El cierre a mano dispara el archivado en el momento; los que vencen por fecha
+los levanta un barredor que corre cada hora.
+
+**Huérfanos** — archivos en `data/` que ninguna fila referencia: subidas
+caídas a mitad, rollos borrados, seeds re-corridos. Se acumulan sin que nada
+los limpie y pueden pesar mucho más que las fotos vivas (en el `data/` de
+desarrollo eran 67 MB contra 1.7 MB de fotos reales). No se borran solos:
+
+```bash
+node server/tools/cleanup.js            # informa, no borra nada
+node server/tools/cleanup.js --apply    # borra los huérfanos
+```
+
+Con `--apply --archive-burnt` además archiva los rollos velados que quedaron
+pendientes. Sin `--apply` no toca nada, y conviene mirar la lista antes.
 
 ## Por qué en el celular no se baja un ZIP
 

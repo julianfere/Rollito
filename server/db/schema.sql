@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS albums (
   expires_at     TEXT,                      -- NULL = sin vencimiento
   is_open        INTEGER NOT NULL DEFAULT 1,
   visibility     TEXT    NOT NULL DEFAULT 'link-only'
-                         CHECK (visibility IN ('public','link-only'))
+                         CHECK (visibility IN ('public','link-only')),
+  archived_at    TEXT                       -- cuándo se liberó el espacio del rollo velado
 );
 
 CREATE TABLE IF NOT EXISTS photos (

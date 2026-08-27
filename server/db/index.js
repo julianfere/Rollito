@@ -23,4 +23,11 @@ for (const sub of ['', 'originals', 'previews', 'zips']) {
 export const db = new Database(join(DATA_DIR, 'rollito.sqlite'));
 db.exec(readFileSync(join(here, 'schema.sql'), 'utf8'));
 
+// schema.sql usa CREATE TABLE IF NOT EXISTS: sobre una base que ya existe no
+// agrega columnas nuevas. Las migraciones van acá, y tienen que ser idempotentes.
+const albumCols = db.prepare('PRAGMA table_info(albums)').all().map((c) => c.name);
+if (!albumCols.includes('archived_at')) {
+  db.exec('ALTER TABLE albums ADD COLUMN archived_at TEXT');
+}
+
 export { DATA_DIR };
