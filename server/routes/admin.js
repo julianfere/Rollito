@@ -164,7 +164,9 @@ export default async function adminRoutes(app) {
         name: p.original_name ?? basename(p.original_path),
         bytes: p.bytes,
         state: p.state,
-        preview: p.state === 'ready' ? `/media/${p.id}.webp` : null,
+        // ?v por el mismo motivo que en albums.js: cache immutable + ids
+        // que se reutilizan cuando la base arranca de cero.
+        preview: p.state === 'ready' ? `/media/${p.id}.webp?v=${p.bytes ?? 0}` : null,
       })),
     };
   });

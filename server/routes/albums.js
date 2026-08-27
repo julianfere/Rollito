@@ -20,7 +20,7 @@ export default async function albumRoutes(app) {
     }
 
     const photos = db.prepare(
-      `SELECT id, width, height, sort FROM photos
+      `SELECT id, width, height, bytes, sort FROM photos
        WHERE album_id = ? AND state = 'ready' ORDER BY sort, id`
     ).all(album.id);
 
@@ -35,7 +35,10 @@ export default async function albumRoutes(app) {
         id: p.id,
         w: p.width,
         h: p.height,
-        preview: `/media/${p.id}.webp`,
+        // ?v: el id se reutiliza si la base se recrea, y la respuesta va con
+        // Cache-Control immutable. Sin esto el browser sirve del cache la
+        // preview que ese id tenía en la base anterior, de otro rollo.
+        preview: `/media/${p.id}.webp?v=${p.bytes ?? 0}`,
         original: `/api/photo/${p.id}/original`,
         lite: `/api/photo/${p.id}/lite`,
       })),
