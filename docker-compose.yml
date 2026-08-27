@@ -11,10 +11,12 @@ services:
       # que un .env lo pisara con algo relativo, las subidas fallarían con
       # ENOENT sobre 'data/originals/...' y las fotos irían fuera del volumen.
       DATA_DIR: /data
-      # Sin valor por defecto a propósito: si falta, el contenedor no arranca.
-      # Se definen en un archivo .env al lado de este compose (ver .env.example).
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?definí ADMIN_PASSWORD en .env}
-      SESSION_SECRET: ${SESSION_SECRET:?definí SESSION_SECRET en .env}
+      # Se definen en el Environment de Dokploy, o en un .env al lado de este
+      # compose fuera de Dokploy (ver .env.example). Sin `:?` a propósito: esa
+      # forma aborta el parseo del compose entero si la variable falta, y el
+      # fallback que toma Dokploy termina ignorando el volumen de más abajo.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
       # Opcionales: aviso al revelador cuando piden reabrir un rollo.
       NOTIFY_WEBHOOK: ${NOTIFY_WEBHOOK:-}
       PUBLIC_URL: ${PUBLIC_URL:-http://rollito.local}
@@ -31,16 +33,16 @@ services:
     volumes:
       # Los originales, las derivadas WebP, los zips y la base viven acá.
       #
-      # Es un bind mount a una carpeta del host, no un volumen
-      # nombrado: en Dokploy los volúmenes nombrados van contra el proyecto y se
-      # recrean vacíos cuando se borra y se vuelve a crear la app (o al cambiar
-      # el nombre del stack), que es exactamente cómo se pierden los rollos ya
-      # compartidos. Una ruta del host no depende del ciclo de vida del stack.
+      # Ruta absoluta del host y no una variable: si la variable no llega a
+      # resolverse, compose no falla — Docker honra el `VOLUME /data` del
+      # Dockerfile y crea un volumen ANÓNIMO, que se descarta al recrear el
+      # contenedor. Así se perdieron los rollos dos veces. La ruta literal
+      # hace imposible ese modo de falla silencioso.
       #
-      # En Dokploy poné DATA_PATH=../files/data (la carpeta persistente que
-      # Dokploy monta por aplicación). Sin la variable, cae en ./data, al lado
-      # del compose, que es lo razonable fuera de Dokploy.
-      - ${DATA_PATH:-./data}:/data
+      # `files/` es la carpeta persistente que Dokploy mantiene por aplicación:
+      # sobrevive al `git pull` que borra y reclona `code/` en cada deploy.
+      # Si cambia el nombre del stack, hay que actualizar esta ruta.
+      - /etc/dokploy/applications/rollito-rollito-c3pgo0/files/data:/data
 
     # La conversión con sharp es lo que más pega en una Raspberry Pi.
     # Este tope evita que el contenedor se coma la máquina entera.

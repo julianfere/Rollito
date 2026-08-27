@@ -5,5 +5,5 @@ data/previews/*
 data/zips/*
 !data/**/.gitkeep
 *.sqlite
-*.sqlite-journal
+*.sqlite-*
 .env

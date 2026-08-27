@@ -58,7 +58,11 @@ RUN mkdir -p /data/originals /data/previews /data/zips \
  && chown -R node:node /data /app
 
 USER node
-VOLUME ["/data"]
+# Sin `VOLUME ["/data"]` a propósito: cuando el mount no llega a declararse,
+# esa línea hace que Docker cree un volumen anónimo y la app arranca como si
+# nada — hasta que el próximo deploy lo descarta con todas las fotos adentro.
+# Sin ella, un mount mal configurado escribe en la capa del contenedor y se
+# nota enseguida, en vez de fallar en silencio semanas después.
 EXPOSE 8087
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
