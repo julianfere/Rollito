@@ -88,7 +88,11 @@ export default async function adminRoutes(app) {
     return { id: r.lastInsertRowid, code };
   });
 
-  /** Subida multipart: guarda el original intacto y encola la derivada. */
+  /**
+   * Subida multipart: guarda el original intacto y encola la derivada.
+   * El panel manda tandas chicas y usa el nombre del campo como clave de cada
+   * archivo: con eso sabe qué resultado es de cuál aunque se repitan nombres.
+   */
   app.post('/api/admin/albums/:id/photos', { preHandler: requireAdmin }, async (req, reply) => {
     const album = db.prepare('SELECT * FROM albums WHERE id = ?').get(req.params.id);
     if (!album) return reply.code(404).send({ error: 'no existe ese rollo' });
@@ -96,50 +100,65 @@ export default async function adminRoutes(app) {
     const saved = [];
     const failed = [];
 
-    for await (const part of req.parts()) {
-      if (part.type !== 'file') continue;
-      if (!part.filename) { part.file.resume(); continue; }
+    // La tanda es todo o nada: si la request se corta a mitad (el panel
+    // canceló, se cayó la red) deshacemos lo que ya se había guardado. Si no,
+    // el reintento del panel vuelve a mandar esas fotos y quedan duplicadas.
+    try {
+      for await (const part of req.parts()) {
+        if (part.type !== 'file') continue;
+        if (!part.filename) { part.file.resume(); continue; }
 
-      // Sólo imágenes: un archivo cualquiera rompería la conversión más adelante.
-      if (part.mimetype && !part.mimetype.startsWith('image/')) {
-        part.file.resume();
-        failed.push({ name: part.filename, reason: 'no es una imagen' });
-        continue;
+        // Sólo imágenes: un archivo cualquiera rompería la conversión más adelante.
+        if (part.mimetype && !part.mimetype.startsWith('image/')) {
+          part.file.resume();
+          failed.push({ key: part.fieldname, name: part.filename, reason: 'no es una imagen' });
+          continue;
+        }
+
+        const sort = db.prepare(
+          'SELECT COALESCE(MAX(sort), -1) + 1 AS n FROM photos WHERE album_id = ?'
+        ).get(album.id).n;
+
+        const row = db.prepare(
+          `INSERT INTO photos (album_id, original_path, original_name, sort, state)
+           VALUES (?, '', ?, ?, 'uploading')`
+        ).run(album.id, part.filename, sort);
+
+        const id = row.lastInsertRowid;
+        const dir = join(DATA_DIR, 'originals');
+        const dest = join(dir, `${id}${extname(part.filename) || '.jpg'}`);
+
+        try {
+          // Barato e idempotente: cubre el caso de que el volumen se monte
+          // encima del directorio después de arrancar el proceso.
+          mkdirSync(dir, { recursive: true });
+          await pipeline(part.file, createWriteStream(dest));
+          // Un archivo truncado (o el límite de tamaño) deja basura: no lo dejamos pasar.
+          if (part.file.truncated) throw new Error('archivo demasiado grande');
+
+          db.prepare('UPDATE photos SET original_path = ? WHERE id = ?').run(dest, id);
+          saved.push({ key: part.fieldname, id, name: part.filename, dest });
+        } catch (err) {
+          // Sin esto la fila quedaba en 'uploading' para siempre y la cola del
+          // panel no terminaba nunca.
+          db.prepare('DELETE FROM photos WHERE id = ?').run(id);
+          try { unlinkSync(dest); } catch {}
+          failed.push({ key: part.fieldname, name: part.filename, reason: String(err?.message ?? err) });
+          app.log.warn({ file: part.filename, err: String(err) }, 'falló la subida');
+        }
       }
-
-      const sort = db.prepare(
-        'SELECT COALESCE(MAX(sort), -1) + 1 AS n FROM photos WHERE album_id = ?'
-      ).get(album.id).n;
-
-      const row = db.prepare(
-        `INSERT INTO photos (album_id, original_path, original_name, sort, state)
-         VALUES (?, '', ?, ?, 'uploading')`
-      ).run(album.id, part.filename, sort);
-
-      const id = row.lastInsertRowid;
-      const dir = join(DATA_DIR, 'originals');
-      const dest = join(dir, `${id}${extname(part.filename) || '.jpg'}`);
-
-      try {
-        // Barato e idempotente: cubre el caso de que el volumen se monte
-        // encima del directorio después de arrancar el proceso.
-        mkdirSync(dir, { recursive: true });
-        await pipeline(part.file, createWriteStream(dest));
-        // Un archivo truncado (o el límite de tamaño) deja basura: no lo dejamos pasar.
-        if (part.file.truncated) throw new Error('archivo demasiado grande');
-
-        db.prepare('UPDATE photos SET original_path = ? WHERE id = ?').run(dest, id);
-        enqueueConversion(id);
-        saved.push({ id, name: part.filename });
-      } catch (err) {
-        // Sin esto la fila quedaba en 'uploading' para siempre y la cola del
-        // panel no terminaba nunca.
-        db.prepare('DELETE FROM photos WHERE id = ?').run(id);
-        try { unlinkSync(dest); } catch {}
-        failed.push({ name: part.filename, reason: String(err?.message ?? err) });
-        app.log.warn({ file: part.filename, err: String(err) }, 'falló la subida');
+    } catch (err) {
+      for (const p of saved) {
+        db.prepare('DELETE FROM photos WHERE id = ?').run(p.id);
+        try { unlinkSync(p.dest); } catch {}
       }
+      app.log.warn({ album: album.id, undone: saved.length, err: String(err) }, 'tanda cortada');
+      return reply.code(400).send({ error: 'se cortó la subida' });
     }
+
+    // Recién con la tanda completa: así no se revela algo que después se deshace.
+    for (const p of saved) enqueueConversion(p.id);
+    saved.forEach((p) => delete p.dest);
 
     if (saved.length === 0) {
       return reply.code(400).send({
@@ -152,12 +171,22 @@ export default async function adminRoutes(app) {
     return { saved, failed };
   });
 
-  /** Estado de la cola: alimenta la lista de subida del panel. */
+  /**
+   * Estado de la cola: alimenta la lista de subida del panel. Con ?ids=1,2,3
+   * devuelve justo esas (una tanda de 100 no entra en las últimas 40).
+   */
   app.get('/api/admin/albums/:id/photos', { preHandler: requireAdmin }, async (req) => {
-    const photos = db.prepare(
-      `SELECT id, original_path, original_name, bytes, state, sort FROM photos
-       WHERE album_id = ? ORDER BY sort DESC LIMIT 40`
-    ).all(req.params.id);
+    const ids = String(req.query?.ids ?? '').split(',')
+      .map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200);
+    const photos = ids.length
+      ? db.prepare(
+        `SELECT id, original_path, original_name, bytes, state, sort FROM photos
+         WHERE album_id = ? AND id IN (${ids.map(() => '?').join(',')})`
+      ).all(req.params.id, ...ids)
+      : db.prepare(
+        `SELECT id, original_path, original_name, bytes, state, sort FROM photos
+         WHERE album_id = ? ORDER BY sort DESC LIMIT 40`
+      ).all(req.params.id);
     return {
       photos: photos.map((p) => ({
         id: p.id,

@@ -4,23 +4,36 @@ import Toast from '../components/Toast.jsx';
 import ExpiryDialog from '../components/ExpiryDialog.jsx';
 import NewAlbumDialog from '../components/NewAlbumDialog.jsx';
 import useToast from '../lib/useToast.js';
+import { MAX_FILES, chunk, sendChunk } from '../lib/upload.js';
 import styles from './AdminPage.module.css';
 
 const mb = (b) => (b == null ? '—' : (b / 1048576).toFixed(1).replace('.', ',') + ' MB');
-const STATE_LABEL = { uploading: 'subiendo', converting: 'revelando webp', ready: 'lista' };
-const BAR_WIDTH = { uploading: '25%', converting: '65%', ready: '100%' };
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const eta = (s) => (s < 60 ? `~${Math.max(5, Math.round(s / 5) * 5)} s` : `~${Math.round(s / 60)} min`);
+const pct = (n, d) => `${d ? (n / d) * 100 : 0}%`;
+
+// Estados de cada foto de la tanda. Los primeros los pone el panel; desde
+// 'uploading' en adelante vienen del server ('uploading' ahí = en cola de revelado).
+const STATE_LABEL = {
+  waiting: 'en espera', sending: 'subiendo', uploading: 'en cola',
+  converting: 'revelando', ready: 'lista', failed: 'falló', canceled: 'cancelada',
+};
+const PLURAL = { ready: 'listas', failed: 'fallaron', canceled: 'canceladas' };
+const SENT = new Set(['uploading', 'converting', 'ready']);
+let seq = 0;
 
 export default function AdminPage() {
   const [data, setData] = useState(null);
-  const [queue, setQueue] = useState([]);
+  const [items, setItems] = useState([]);       // fotos de la tanda en curso
   const [target, setTarget] = useState(null);   // rollo al que se sube
   const [expiry, setExpiry] = useState(null);
   const [drag, setDrag] = useState(false);
   const [pending, setPending] = useState(null); // archivos esperando nombre de rollo
-  const [batch, setBatch] = useState(null);     // ids de la tanda que se está subiendo
   const [busy, setBusy] = useState(false);
   const [toast, say] = useToast();
   const fileInput = useRef(null);
+  const abortRef = useRef(null);
+  const rate = useRef(null);                    // { t0, b0 } para estimar cuánto falta
   const nav = useNavigate();
 
   const load = useCallback(async () => {
@@ -31,92 +44,162 @@ export default function AdminPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  /** Trae del server el estado de las fotos del rollo activo. */
-  const refreshQueue = useCallback(async (albumId, ids = null) => {
-    const r = await fetch(`/api/admin/albums/${albumId}/photos`);
-    if (!r.ok) return [];
-    const { photos } = await r.json();
-    // Sólo lo de esta tanda: el endpoint devuelve las últimas 40 del rollo, y al
-    // subir a un rollo que ya tenía fotos el conteo mezclaba viejas con nuevas
-    // y la cola nunca llegaba a "0 en proceso".
-    const mias = ids ? photos.filter((p) => ids.includes(p.id)) : photos;
-    setQueue(mias);
-    return mias;
+  /** Aplica `patch` (objeto o función del item) a los items cuyas claves están en `keys`. */
+  const update = useCallback((keys, patch) => {
+    setItems((list) => list.map((it) => (keys.has(it.key)
+      ? { ...it, ...(typeof patch === 'function' ? patch(it) : patch) }
+      : it)));
   }, []);
 
   // `load` cambia `data` en cada llamada y con eso su identidad; si estuviera en
-  // las dependencias del efecto de abajo, cada refresco reiniciaría el intervalo
-  // y la cola nunca terminaba de estabilizarse.
+  // las dependencias de los efectos de abajo, cada refresco reiniciaría el
+  // intervalo y la cola nunca terminaba de estabilizarse.
   const loadRef = useRef(load);
   useEffect(() => { loadRef.current = load; }, [load]);
 
-  // Seguimos la conversión de la tanda recién subida hasta que estén todas listas.
+  // Ids ya guardados que todavía no terminaron de revelarse. Como string para
+  // que el efecto sólo se reinicie cuando cambia el conjunto, no en cada render.
+  const pendingIds = items
+    .filter((it) => it.id && it.status !== 'ready')
+    .map((it) => it.id).join(',');
+
+  // Seguimos la conversión de lo que ya llegó, mientras siguen subiendo las demás.
   useEffect(() => {
-    if (!target || !batch?.length) return;
+    if (!target || !pendingIds) return;
     let alive = true;
-    let timer = null;
-
     const tick = async () => {
+      const r = await fetch(`/api/admin/albums/${target}/photos?ids=${pendingIds}`).catch(() => null);
+      if (!alive || !r?.ok) return;
+      const { photos } = await r.json();
       if (!alive) return;
-      const photos = await refreshQueue(target, batch);
-      if (!alive) return;
-      if (photos.length === batch.length && photos.every((p) => p.state === 'ready')) {
-        clearInterval(timer);
-        loadRef.current();
-      }
+      const byId = new Map(photos.map((p) => [p.id, p]));
+      setItems((list) => list.map((it) => {
+        const p = it.id && byId.get(it.id);
+        return p && p.state !== it.status ? { ...it, status: p.state, preview: p.preview } : it;
+      }));
     };
-
-    timer = setInterval(tick, 700);
+    const timer = setInterval(tick, 1000);
     tick();
     return () => { alive = false; clearInterval(timer); };
-  }, [target, batch, refreshQueue]);
+  }, [target, pendingIds]);
+
+  // Todo revelado: refrescamos los rollos para que aparezcan conteo y portada.
+  const settled = items.length > 0 && !busy && !pendingIds;
+  useEffect(() => { if (settled) loadRef.current(); }, [settled]);
 
   /**
-   * Sube al rollo indicado. El id llega por parámetro a propósito: leer `target`
-   * del estado acá no servía, porque después de crear un rollo `setTarget()`
-   * todavía no se reflejó y las fotos se subían al rollo equivocado (o a ninguno).
+   * Sube los items al rollo indicado, de a tandas y en orden (una a la vez:
+   * el cuello es el upload de la conexión, y así el orden del rollo respeta el
+   * elegido). El id llega por parámetro a propósito: leer `target` del estado
+   * acá no servía, porque después de crear un rollo `setTarget()` todavía no
+   * se reflejó y las fotos se subían al rollo equivocado (o a ninguno).
    */
-  const uploadTo = useCallback(async (albumId, files) => {
-    const list = [...files];
-    if (!list.length) return;
-
+  const run = useCallback(async (albumId, todo) => {
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setBusy(true);
     setTarget(albumId);
-    setQueue([]);
+    rate.current = null;
+    const url = `/api/admin/albums/${albumId}/photos`;
+    let ok = 0;
+    let bad = 0;
 
-    try {
-      const fd = new FormData();
-      list.forEach((f, i) => fd.append(`f${i}`, f));
-      const r = await fetch(`/api/admin/albums/${albumId}/photos`, { method: 'POST', body: fd });
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
-        say(body.error ?? 'No pudimos subir esas fotos');
-        setQueue([]);
-        return;
+    for (const group of chunk(todo)) {
+      if (ctrl.signal.aborted) break;
+      const keys = new Set(group.map((it) => it.key));
+      const total = group.reduce((n, it) => n + it.size, 0);
+      update(keys, { status: 'sending', sent: 0, error: null });
+
+      // El progreso es de la request entera: lo repartimos en orden entre los
+      // archivos, que es como viajan dentro del multipart.
+      const onProgress = (ratio) => {
+        const sentBy = new Map();
+        let left = ratio * total;
+        for (const it of group) {
+          sentBy.set(it.key, Math.min(it.size, Math.max(0, left)));
+          left -= it.size;
+        }
+        update(keys, (it) => ({ sent: sentBy.get(it.key) }));
+      };
+
+      // Un corte de red o un 5xx se reintenta una vez; un 4xx no tiene arreglo.
+      let res = null;
+      let error = 'se cortó la conexión';
+      for (let attempt = 0; attempt < 2 && !res && !ctrl.signal.aborted; attempt++) {
+        if (attempt) { await wait(1500); update(keys, { sent: 0 }); }
+        try {
+          const r = await sendChunk(url, group, { onProgress, signal: ctrl.signal });
+          if (r.status >= 500) error = r.body?.error ?? `el server respondió ${r.status}`;
+          else res = r;
+        } catch (err) {
+          if (err.name !== 'AbortError') error = err.message;
+        }
       }
-      const { saved, failed = [] } = await r.json();
-      const ids = saved.map((p) => p.id);
-      setBatch(ids);
-      say(failed.length
-        ? `${saved.length} en el cuarto oscuro · ${failed.length} no se pudo${failed.length === 1 ? '' : 'ieron'} subir`
-        : `${saved.length} ${saved.length === 1 ? 'foto' : 'fotos'} en el cuarto oscuro`);
-      await refreshQueue(albumId, ids);
-      load();
-    } catch {
-      say('Se cortó la subida');
-      setQueue([]);
-    } finally {
-      setBusy(false);
+      if (ctrl.signal.aborted) break;
+      if (res?.status === 401) { nav('/admin/login'); return; }
+
+      const byKey = new Map();
+      for (const p of res?.body?.saved ?? []) byKey.set(p.key, { status: 'uploading', id: p.id });
+      for (const p of res?.body?.failed ?? []) byKey.set(p.key, { status: 'failed', error: p.reason });
+      const fallback = { status: 'failed', error: res?.body?.error ?? error };
+      for (const it of group) {
+        if (byKey.get(it.key)?.status === 'uploading') ok++;
+        else bad++;
+      }
+      update(keys, (it) => {
+        const r = byKey.get(it.key) ?? fallback;
+        return { ...r, sent: r.status === 'uploading' ? it.size : 0 };
+      });
     }
-  }, [say, refreshQueue, load]);
+
+    const canceled = ctrl.signal.aborted;
+    if (canceled) {
+      setItems((list) => list.map((it) => (it.status === 'waiting' || it.status === 'sending'
+        ? { ...it, status: 'canceled', sent: 0 } : it)));
+    }
+    abortRef.current = null;
+    setBusy(false);
+    say(canceled
+      ? `Subida cancelada · ${ok} ${ok === 1 ? 'llegó' : 'llegaron'}`
+      : bad
+        ? `${ok} en el cuarto oscuro · ${bad} no se pudo${bad === 1 ? '' : 'ieron'} subir`
+        : `${ok} ${ok === 1 ? 'foto' : 'fotos'} en el cuarto oscuro`);
+    loadRef.current();
+  }, [update, say, nav]);
+
+  /** Arma la tanda nueva y la sube. Más de MAX_FILES se recortan, avisando. */
+  const uploadTo = useCallback((albumId, files) => {
+    let list = [...files];
+    if (!list.length) return;
+    if (list.length > MAX_FILES) {
+      say(`Van las primeras ${MAX_FILES} de ${list.length}: subí el resto en otra tanda`);
+      list = list.slice(0, MAX_FILES);
+    }
+    const fresh = list.map((file) => ({
+      key: `f${++seq}`, file, name: file.name, size: file.size,
+      status: 'waiting', sent: 0, id: null, preview: null, error: null,
+    }));
+    setItems(fresh);
+    return run(albumId, fresh);
+  }, [run, say]);
+
+  /** Vuelve a mandar las que fallaron o se cancelaron, al mismo rollo. */
+  const retry = useCallback(() => {
+    const again = items.filter((it) => it.status === 'failed' || it.status === 'canceled');
+    if (!again.length || !target) return;
+    update(new Set(again.map((it) => it.key)), { status: 'waiting', sent: 0, error: null });
+    run(target, again);
+  }, [items, target, update, run]);
 
   /** Elegir archivos: si ya hay un rollo activo van ahí; si no, pedimos nombre. */
   const pick = useCallback((files) => {
     const list = [...(files ?? [])];
     if (!list.length) return;
+    // Una tanda a la vez: mezclar dos haría imposible seguir cuál es cuál.
+    if (busy) { say('Esperá a que termine esta tanda'); return; }
     if (target) uploadTo(target, list);
     else setPending(list);
-  }, [target, uploadTo]);
+  }, [busy, target, uploadTo, say]);
 
   /** Crea el rollo y recién ahí sube: si la creación falla, no queda rollo vacío. */
   const createAndUpload = useCallback(async ({ title, days, code }) => {
@@ -175,9 +258,25 @@ Es lo que forma el link: ${location.host}/r/CODIGO
 
   if (!data) return <div className={styles.center} />;
 
-  const ready = queue.filter((p) => p.state === 'ready').length;
-  const working = queue.length - ready;
+  const count = (st) => items.filter((it) => it.status === st).length;
+  const ready = count('ready');
+  const failed = count('failed') + count('canceled');
+  const arrived = items.filter((it) => SENT.has(it.status)).length;
+  const totalBytes = items.reduce((n, it) => n + it.size, 0);
+  const sentBytes = items.reduce((n, it) => n + (SENT.has(it.status) ? it.size : it.sent), 0);
   const targetTitle = data.albums.find((a) => a.id === target)?.title ?? null;
+
+  // Cuánto falta de subida, con la velocidad promedio desde que arrancó la tanda.
+  let left = null;
+  if (busy) {
+    const now = Date.now();
+    if (!rate.current) rate.current = { t0: now, b0: sentBytes };
+    const secs = (now - rate.current.t0) / 1000;
+    const speed = (sentBytes - rate.current.b0) / secs;
+    const pendingBytes = items.reduce((n, it) =>
+      n + (it.status === 'waiting' || it.status === 'sending' ? it.size - it.sent : 0), 0);
+    if (secs > 3 && speed > 0) left = eta(pendingBytes / speed);
+  }
 
   return (
     <div className={styles.root}>
@@ -261,47 +360,90 @@ Es lo que forma el link: ${location.host}/r/CODIGO
         />
       </div>
 
-      {queue.length > 0 && (
+      {items.length > 0 && (
         <div className={styles.queue}>
           <div className={styles.queueHead}>
-            <span className={`mono ${styles.queueTitle}`}>
-              {queue.length} {queue.length === 1 ? 'foto' : 'fotos'} en el cuarto oscuro
-            </span>
-            <span className={`mono ${styles.queueSub}`}>
-              {targetTitle ? `en «${targetTitle}» · ` : ''}
-              {ready} {ready === 1 ? 'lista' : 'listas'} · {working} en proceso
-            </span>
-            {working === 0 && (
-              <button
-                className={styles.closeQueue}
-                onClick={() => { setQueue([]); setTarget(null); setBatch(null); }}
-              >
-                Listo
-              </button>
-            )}
-          </div>
-
-          {queue.map((p) => (
-            <div key={p.id} className={styles.row}>
-              <span className={styles.thumb}>
-                {p.preview && <img src={p.preview} alt="" />}
+            <div className={styles.queueText}>
+              <span className={`mono ${styles.queueTitle}`}>
+                {busy
+                  ? `Subiendo ${arrived} de ${items.length}`
+                  : pendingIds
+                    ? `Revelando ${ready} de ${arrived}`
+                    : `${ready} ${ready === 1 ? 'foto revelada' : 'fotos reveladas'}`}
+                {targetTitle ? ` · «${targetTitle}»` : ''}
               </span>
-              <span className={`mono ${styles.name}`}>{p.name}</span>
-              <span className={`mono ${styles.size}`}>{mb(p.bytes)}</span>
-              <span className={styles.track}>
-                <span
-                  className={styles.bar}
-                  style={{
-                    width: BAR_WIDTH[p.state],
-                    background: p.state === 'ready' ? 'var(--sage)' : 'var(--hot)',
-                  }}
-                />
-              </span>
-              <span className={`mono ${styles.tag} ${p.state === 'ready' ? styles.tagOk : ''}`}>
-                {STATE_LABEL[p.state]}
+              <span className={`mono ${styles.queueSub}`}>
+                {mb(sentBytes)} de {mb(totalBytes)}
+                {left ? ` · falta ${left}` : ''}
+                {failed > 0 && <span className={styles.bad}> · {failed} sin subir</span>}
               </span>
             </div>
-          ))}
+            <div className={styles.queueActions}>
+              {busy && (
+                <button className={styles.closeQueue} onClick={() => abortRef.current?.abort()}>
+                  Cancelar
+                </button>
+              )}
+              {!busy && failed > 0 && (
+                <button className={styles.closeQueue} onClick={retry}>
+                  Reintentar {failed}
+                </button>
+              )}
+              {!busy && !pendingIds && (
+                <button
+                  className={styles.closeQueue}
+                  onClick={() => { setItems([]); setTarget(null); }}
+                >
+                  Listo
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Dos capas: lo subido (naranja) y, encima, lo ya revelado (verde). */}
+          <div className={styles.total} role="progressbar" aria-label="Fotos reveladas"
+            aria-valuemin={0} aria-valuemax={items.length} aria-valuenow={ready}>
+            <span className={styles.totalSent} style={{ width: pct(sentBytes, totalBytes) }} />
+            <span className={styles.totalReady} style={{ width: pct(ready, items.length) }} />
+          </div>
+
+          <ul className={styles.sheet}>
+            {items.map((it) => (
+              <li
+                key={it.key}
+                className={`${styles.cell} ${styles[`is_${it.status}`] ?? ''}`}
+                title={`${it.name} · ${mb(it.size)} · ${it.error ?? STATE_LABEL[it.status]}`}
+              >
+                {it.preview && <img src={it.preview} alt="" />}
+                {it.status === 'sending' && (
+                  <span className={styles.cellBar} style={{ width: pct(it.sent, it.size) }} />
+                )}
+              </li>
+            ))}
+          </ul>
+
+          <div className={`mono ${styles.legend}`}>
+            {['waiting', 'sending', 'uploading', 'converting', 'ready', 'failed', 'canceled']
+              .map((st) => [st, count(st)])
+              .filter(([, n]) => n > 0)
+              .map(([st, n]) => (
+                <span key={st}>
+                  <i className={`${styles.dot} ${styles[`is_${st}`]}`} />
+                  {n} {(n > 1 && PLURAL[st]) || STATE_LABEL[st]}
+                </span>
+              ))}
+          </div>
+
+          {items.some((it) => it.error) && (
+            <ul className={styles.errors}>
+              {items.filter((it) => it.error).map((it) => (
+                <li key={it.key} className="mono">
+                  <span className={styles.name}>{it.name}</span>
+                  <span className={styles.bad}>{it.error}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -371,7 +513,8 @@ Es lo que forma el link: ${location.host}/r/CODIGO
               </button>
               <button
                 className={styles.secondary}
-                onClick={() => { setTarget(a.id); setQueue([]); setBatch(null); fileInput.current?.click(); }}
+                disabled={busy}
+                onClick={() => { setTarget(a.id); setItems([]); fileInput.current?.click(); }}
               >
                 Subir acá
               </button>
